@@ -21,6 +21,7 @@ const Index = () => {
   const [showAddPanel, setShowAddPanel] = useState(false);
   useNotificationReminders(subscriptions);
 
+
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth", { replace: true });
   }, [user, authLoading, navigate]);
