@@ -7,26 +7,27 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for OAuth callback hash in URL
-    const handleAuthCallback = async () => {
-      const hash = window.location.hash;
-      if (hash && hash.includes("access_token")) {
-        // Supabase client will automatically handle the hash
-        // We just need to wait a moment for it to process
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        // Clear the hash from URL
+    // Handle OAuth callback - supabase will parse the hash automatically
+    const initAuth = async () => {
+      // This call processes the URL hash if it contains auth tokens
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("Auth error:", error);
+      }
+
+      setUser(session?.user ?? null);
+      setLoading(false);
+
+      // Clear the hash from URL after processing
+      if (window.location.hash.includes("access_token")) {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     };
 
-    handleAuthCallback();
+    initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
