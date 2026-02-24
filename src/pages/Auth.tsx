@@ -1,25 +1,77 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
 
 const Auth = () => {
-  const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && user) navigate("/", { replace: true });
-  }, [user, loading, navigate]);
+    const handleAuth = async () => {
+      try {
+        // Check if this is an OAuth callback (has access_token in hash)
+        const hash = window.location.hash;
+        if (hash && hash.includes("access_token")) {
+          console.log("Processing OAuth callback...");
+
+          // Parse tokens from hash
+          const params = new URLSearchParams(hash.substring(1));
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+
+          if (accessToken) {
+            // Set the session
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || "",
+            });
+
+            if (error) {
+              console.error("Error setting session:", error);
+              setError("Failed to sign in. Please try again.");
+            } else if (data.session) {
+              console.log("Signed in successfully:", data.session.user.email);
+              // Clear hash and redirect to home
+              window.history.replaceState({}, document.title, "/auth");
+              navigate("/", { replace: true });
+              return;
+            }
+          }
+        }
+
+        // Check if already logged in
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log("Already logged in:", session.user.email);
+          navigate("/", { replace: true });
+          return;
+        }
+      } catch (err) {
+        console.error("Auth error:", err);
+        setError("An error occurred. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    handleAuth();
+  }, [navigate]);
 
   const handleGoogleLogin = async () => {
+    setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: `${window.location.origin}/auth`,
       },
     });
-    if (error) console.error("OAuth error:", error);
+    if (error) {
+      console.error("OAuth error:", error);
+      setError("Failed to start sign in. Please try again.");
+      setLoading(false);
+    }
   };
 
   if (loading) {
@@ -47,10 +99,17 @@ const Auth = () => {
           </p>
         </div>
 
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 mb-4">
+            <p className="text-xs text-destructive text-center">{error}</p>
+          </div>
+        )}
+
         <div className="bg-card border border-border rounded-lg p-4">
           <button
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-2.5 h-9 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2.5 h-9 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
